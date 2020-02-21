@@ -1,5 +1,5 @@
 import * as sinon from 'sinon'
-import { PathExistenceChecker, properAncestors } from './existence'
+import { PathExistenceChecker } from './existence'
 import { getDirectoryChildren } from '../../shared/gitserver/gitserver'
 import { range } from 'lodash'
 
@@ -20,19 +20,31 @@ describe('PathExistenceChecker', () => {
             mockGetDirectoryChildren: ({ dirname }) => Promise.resolve(new Set(children.get(dirname))),
         })
 
+        // TODO - make a table test
+        await pathExistenceChecker.warmCache([
+            'foo.ts',
+            'bar.ts',
+            'shared/bonk.ts',
+            '../shared/bar.ts',
+            '../shared/bar.ts',
+            '../shared/bonk.ts',
+            '../node_modules/@types/quux.ts',
+            '../../node_modules/@types/oops.ts',
+        ])
+
         // Test within root
-        expect(await pathExistenceChecker.shouldIncludePath('foo.ts', false)).toBeTruthy()
-        expect(await pathExistenceChecker.shouldIncludePath('bar.ts', false)).toBeFalsy()
-        expect(await pathExistenceChecker.shouldIncludePath('shared/bonk.ts', false)).toBeTruthy()
+        expect(pathExistenceChecker.shouldIncludePath('foo.ts', false)).toBeTruthy()
+        expect(pathExistenceChecker.shouldIncludePath('bar.ts', false)).toBeFalsy()
+        expect(pathExistenceChecker.shouldIncludePath('shared/bonk.ts', false)).toBeTruthy()
 
         // Test outside root but within repo
-        expect(await pathExistenceChecker.shouldIncludePath('../shared/bar.ts', false)).toBeTruthy()
-        expect(await pathExistenceChecker.shouldIncludePath('../shared/bar.ts', true)).toBeFalsy()
-        expect(await pathExistenceChecker.shouldIncludePath('../shared/bonk.ts', false)).toBeFalsy()
-        expect(await pathExistenceChecker.shouldIncludePath('../node_modules/@types/quux.ts', false)).toBeFalsy()
+        expect(pathExistenceChecker.shouldIncludePath('../shared/bar.ts', false)).toBeTruthy()
+        expect(pathExistenceChecker.shouldIncludePath('../shared/bar.ts', true)).toBeFalsy()
+        expect(pathExistenceChecker.shouldIncludePath('../shared/bonk.ts', false)).toBeFalsy()
+        expect(pathExistenceChecker.shouldIncludePath('../node_modules/@types/quux.ts', false)).toBeFalsy()
 
         // Test outside repo
-        expect(await pathExistenceChecker.shouldIncludePath('../../node_modules/@types/oops.ts', false)).toBeFalsy()
+        expect(pathExistenceChecker.shouldIncludePath('../../node_modules/@types/oops.ts', false)).toBeFalsy()
     })
 
     it('should cache directory contents', async () => {
@@ -49,9 +61,11 @@ describe('PathExistenceChecker', () => {
             mockGetDirectoryChildren,
         })
 
+        await pathExistenceChecker.warmCache(Array.from(range(0, 100).flatMap(i => [`${i}.ts`, `${i}.js`])))
+
         for (let i = 0; i < 100; i++) {
-            expect(await pathExistenceChecker.shouldIncludePath(`${i}.ts`, false)).toBeTruthy()
-            expect(await pathExistenceChecker.shouldIncludePath(`${i}.js`, false)).toBeFalsy()
+            expect(pathExistenceChecker.shouldIncludePath(`${i}.ts`, false)).toBeTruthy()
+            expect(pathExistenceChecker.shouldIncludePath(`${i}.js`, false)).toBeFalsy()
         }
 
         expect(mockGetDirectoryChildren.callCount).toEqual(1)
@@ -71,9 +85,13 @@ describe('PathExistenceChecker', () => {
             mockGetDirectoryChildren,
         })
 
+        await pathExistenceChecker.warmCache(
+            range(0, 100).flatMap(i => [`node_modules/${i}/deeply/nested/lib/file.ts`])
+        )
+
         for (let i = 0; i < 100; i++) {
             const path = `node_modules/${i}/deeply/nested/lib/file.ts`
-            expect(await pathExistenceChecker.shouldIncludePath(path, false)).toBeFalsy()
+            expect(pathExistenceChecker.shouldIncludePath(path, false)).toBeFalsy()
         }
 
         // Should only check children of / and /node_modules
@@ -81,8 +99,8 @@ describe('PathExistenceChecker', () => {
     })
 })
 
-describe('properAncestors', () => {
-    it('should return all ancestor directories', () => {
-        expect(properAncestors('foo/bar/baz/bonk')).toEqual(['', 'foo', 'foo/bar', 'foo/bar/baz'])
-    })
-})
+// describe('properAncestors', () => {
+//     it('should return all ancestor directories', () => {
+//         expect(properAncestors('foo/bar/baz/bonk')).toEqual(['', 'foo', 'foo/bar', 'foo/bar/baz'])
+//     })
+// })
